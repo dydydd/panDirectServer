@@ -443,6 +443,53 @@ def optimize_database():
             'message': '数据库优化失败'
         }), 500
 
+@app.route('/api/restart', methods=['POST'])
+def restart_service():
+    """重启服务"""
+    try:
+        import threading
+        import time
+        
+        def delayed_restart():
+            """延迟重启，给客户端时间接收响应"""
+            time.sleep(2)  # 等待2秒让响应返回
+            logger.info("🔄 执行服务重启...")
+            
+            import os
+            import sys
+            
+            try:
+                # 方法1：尝试使用os._exit()强制退出
+                logger.info("🛑 正在停止服务...")
+                os._exit(0)
+            except Exception as e:
+                logger.error(f"重启失败: {e}")
+                # 方法2：尝试sys.exit()
+                sys.exit(0)
+        
+        # 在后台线程中执行重启
+        restart_thread = threading.Thread(target=delayed_restart, daemon=True)
+        restart_thread.start()
+        
+        logger.info("🔄 重启请求已接收，服务将在2秒后重启")
+        
+        return jsonify({
+            'code': 200,
+            'message': '服务重启中...',
+            'data': {
+                'restart_delay': 2,
+                'status': 'restarting'
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"重启服务失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': f'重启失败: {str(e)}',
+            'data': None
+        }), 500
+
 @app.route('/api/download-mode', methods=['GET'])
 def get_download_mode():
     """获取当前下载模式"""
