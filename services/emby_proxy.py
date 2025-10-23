@@ -582,15 +582,92 @@ class EmbyProxyService:
                     return None
 
         except Exception as e:
-            logger.error(f"❌ 处理重定向异常: {e}")
+            logger.error(f"❌ 处理302重定向异常: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return None
 
+    def _should_attempt_redirect(self, path, config):
+        """
+        快速判断是否应该尝试获取直链进行重定向
+        避免对本地资源进行不必要的API查询
+        """
+        try:
+            # 检查路径映射是否启用
+            if not config['emby']['path_mapping']['enable']:
+                logger.debug(f"📍 路径映射未启用，所有资源走代理")
+                return False
+            
+            # 从URL中快速提取item_id
+            item_id = self._extract_item_id_from_path(path)
+            if not item_id:
+                logger.debug(f"📍 无法提取item_id，走代理")
+                return False
+            
+            # 🚀 超快速检查：永久路径数据库
+            if self.item_path_db.has(item_id):
+                db_path = self.item_path_db.get(item_id)
+                logger.debug(f"📍 数据库命中: {os.path.basename(db_path)}")
+                
+                # 快速路径匹配检查
+                from_prefix = config['emby']['path_mapping']['from']
+                normalized_path = db_path.replace('\\', '/')
+                normalized_prefix = from_prefix.replace('\\', '/')
+                
+                if normalized_path.startswith(normalized_prefix):
+                    logger.debug(f"📍 匹配网盘前缀，需要重定向")
+                    return True
+                else:
+                    logger.debug(f"📍 不匹配网盘前缀，走代理")
+                    return False
+            
+            # 如果数据库中没有，暂时返回True让后续逻辑处理
+            # 这样可以在查询过程中建立缓存
+            logger.debug(f"📍 数据库未命中，尝试查询")
+            return True
+            
         except Exception as e:
-            logger.error(f"处理302重定向异常: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error(f"❌ 判断重定向异常: {e}")
+            return False  # 异常时走代理，更安全
+    
+    def _extract_item_id_from_path(self, path):
+        """从路径中快速提取item_id"""
+        try:
+            # 从 URL 中提取 item id
+            # 典型路径:
+            # - videos/{itemId}/stream.mkv
+            # - videos/{itemId}/original.strm
+            # - Items/{itemId}/Download
+            parts = [p for p in path.split('/') if p]  # 过滤空字符串
+
+            for i, part in enumerate(parts):
+                if part.lower() in ['videos', 'items'] and i + 1 < len(parts):
+                    # 下一个部分应该是数字 ID 或 stream.xxx
+                    potential_id = parts[i + 1]
+
+                    # 如果是 stream.mkv 这种格式，直接提取数字
+                    if potential_id.isdigit():
+                        return potential_id
+
+                    # 如果包含 stream. 或 original.，可能是文件名，尝试从之前获取
+                    # 例如：videos/50/stream.mkv
+                    import re
+                    match = re.match(r'^(\d+)', potential_id)
+                    if match:
+                        return match.group(1)
+
+            # 如果还没找到，尝试从 MediaSourceId 参数获取
+            media_source_id = request.args.get('MediaSourceId') or request.args.get('mediaSourceId')
+            if media_source_id:
+                if media_source_id.startswith('mediasource_'):
+                    return media_source_id.replace('mediasource_', '')
+                elif media_source_id.isdigit():
+                    return media_source_id
+
+            return None
+            
+        except Exception as e:
+            logger.debug(f"提取item_id异常: {e}")
             return None
 
     def apply_path_mapping(self, original_path, config):
@@ -1291,15 +1368,21 @@ class EmbyProxyService:
 
         if config['emby']['redirect_enable'] and is_video_request:
             try:
-                # 尝试获取直链并 302 重定向
-                direct_url = self.handle_emby_video_redirect(path)
-                if direct_url:
-                    return redirect(direct_url, code=302)
-                elif direct_url is None:
-                    # None表示本地资源，直接走代理播放，不输出警告
-                    logger.debug(f"🏠 本地资源直接走代理播放")
+                # 🎯 核心优化：先快速判断是否需要重定向
+                should_redirect = self._should_attempt_redirect(path, config)
+                
+                if should_redirect:
+                    # 只对匹配路径的资源尝试获取直链
+                    logger.debug(f"🌐 检测到网盘资源，尝试获取直链...")
+                    direct_url = self.handle_emby_video_redirect(path)
+                    if direct_url:
+                        return redirect(direct_url, code=302)
+                    else:
+                        logger.warning(f"⚠️ 网盘资源获取直链失败，回退到普通代理")
                 else:
-                    logger.warning(f"⚠️ 网盘资源获取直链失败，回退到普通代理")
+                    # 本地资源直接跳过重定向逻辑
+                    logger.debug(f"🏠 本地资源，直接代理播放")
+                    
             except Exception as e:
                 logger.error(f"❌ 302 重定向失败: {e}, 回退到普通代理")
 
