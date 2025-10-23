@@ -105,17 +105,12 @@ class Pan123Service:
                 # 第二步：添加URL鉴权
                 direct_url = self._add_url_auth(direct_url)
                 
-                # 第三步：测试直链是否有效（可选，可能增加延迟）
-                # 注释掉测试环节以提高速度，由上层缓存机制处理
-                # try:
-                #     import requests
-                #     test_response = requests.head(direct_url, timeout=5, allow_redirects=True)
-                #     if test_response.status_code != 200:
-                #         logger.warning(f"⚠️ 直链无效: {test_response.status_code}，降级到代理下载")
-                #         return self._get_proxied_download_link(file_name, mapped_path)
-                # except Exception as e:
-                #     logger.warning(f"⚠️ 直链测试失败: {e}，降级到代理下载")
-                #     return self._get_proxied_download_link(file_name, mapped_path)
+                # 第三步：快速直链验证（优化超时时间）
+                if self._quick_validate_direct_url(direct_url):
+                    logger.info(f"✅ 直连验证成功: {file_name}")
+                else:
+                    logger.warning(f"⚠️ 直连验证失败，快速降级到代理下载")
+                    return self._get_fast_proxied_download_link(file_name, mapped_path)
 
                 # 第四步：直链模式不需要缓存（域名+路径构建很快）
                 # 只在上层Emby代理中缓存最终结果，避免重复查询Emby API
@@ -182,13 +177,10 @@ class Pan123Service:
             # 通过代理方式处理下载链接
             proxied_url = self._proxy_download_url(download_url)
 
-            # 写入缓存（可选）
-            if use_cache and mapped_path:
-                cache_key = f"123_proxy:{mapped_path}"
-                try:
-                    self.cache.set_direct_link(cache_key, proxied_url, expire_time=300)
-                except Exception:
-                    pass
+            # 不缓存代理链接，因为代理链接容易失效
+            # 代理链接通过服务器转发，链接本身不会失效，但内容链接可能失效
+            # 为了确保获取最新的下载链接，不缓存代理URL
+            logger.debug(f"📝 代理链接不缓存，确保获取最新下载链接")
 
             return {
                 'name': file_name,
@@ -217,9 +209,15 @@ class Pan123Service:
             # ⚠️ 关键：对原始下载链接进行URL编码，避免参数混淆
             encoded_url = quote(download_url, safe='')
             
-            # 获取服务器配置
+            # 动态读取Emby反向代理端口配置
+            emby_config = self.config.get('emby', {})
             service_config = self.config.get('service', {})
-            port = service_config.get('port', 5245)
+            
+            # 从配置中动态获取Emby代理端口，允许用户自定义
+            emby_proxy_port = emby_config.get('port', 8096)
+            port = emby_proxy_port
+            
+            logger.debug(f"📡 动态读取Emby代理端口: {port}")
             
             # 优先使用配置的外部访问地址（用于代理模式）
             external_url = service_config.get('external_url', '')
@@ -238,25 +236,153 @@ class Pan123Service:
                         # 从当前请求获取客户端访问的地址
                         scheme = 'https' if request.is_secure else 'http'
                         host = request.host  # 包含端口，如 dy.127255.best:8096
-                        # 替换为服务端口
+                        # 使用Emby代理端口
                         if ':' in host:
                             host = host.split(':')[0]
                         proxied_url = f"{scheme}://{host}:{port}/proxy/download?url={encoded_url}"
-                        logger.info(f"🔄 自动检测地址生成代理URL: {proxied_url[:80]}...")
+                        logger.info(f"🔄 使用Emby代理端口生成代理URL: {proxied_url[:80]}...")
                     else:
-                        # 回退：使用localhost
+                        # 回退：使用localhost的Emby代理端口
                         proxied_url = f"http://localhost:{port}/proxy/download?url={encoded_url}"
-                        logger.warning(f"⚠️ 未配置external_url且无法自动检测，使用localhost: {proxied_url[:80]}...")
+                        logger.info(f"🔄 回退使用localhost Emby代理端口: {proxied_url[:80]}...")
                 except Exception as e:
-                    # 回退：使用localhost
+                    # 回退：使用localhost的Emby代理端口
                     proxied_url = f"http://localhost:{port}/proxy/download?url={encoded_url}"
-                    logger.warning(f"⚠️ 地址检测失败，使用localhost: {e}")
+                    logger.info(f"🔄 地址检测失败，使用localhost Emby代理端口: {e}")
             
             return proxied_url
 
         except Exception as e:
             logger.error(f"❌ 代理下载链接生成异常: {e}")
             return download_url
+    
+    def _quick_validate_direct_url(self, direct_url):
+        """快速验证直连URL（0.8秒超时）"""
+        try:
+            import requests
+            logger.debug(f"🧪 快速验证直连: {direct_url[:60]}...")
+            
+            # 使用很短的超时时间进行快速验证
+            response = requests.head(direct_url, timeout=0.8, allow_redirects=False)
+            
+            # 200, 206, 302, 301都认为是成功
+            if response.status_code in [200, 206, 301, 302]:
+                logger.debug(f"✅ 直连验证通过: HTTP {response.status_code}")
+                return True
+            else:
+                logger.debug(f"⚠️ 直连返回: HTTP {response.status_code}")
+                return False
+                
+        except requests.exceptions.Timeout:
+            logger.debug(f"⚠️ 直连验证超时(0.8s)")
+            return False
+        except Exception as e:
+            logger.debug(f"⚠️ 直连验证异常: {e}")
+            return False
+    
+    def _get_fast_proxied_download_link(self, file_name, mapped_path=None):
+        """快速获取代理下载链接（优化版本）"""
+        try:
+            # 优先检查文件搜索缓存
+            search_cache = self._get_cached_file_search(file_name)
+            
+            if search_cache:
+                logger.info(f"🎯 文件搜索缓存命中: {file_name}")
+                file_id = search_cache['file_id']
+                
+                # 直接获取下载链接，跳过搜索步骤
+                download_url = self.client.download_url({'FileID': file_id})
+                
+                if download_url:
+                    proxied_url = self._proxy_download_url(download_url)
+                    
+                    return {
+                        'name': file_name,
+                        'size': search_cache.get('file_size', 0),
+                        'is_dir': False,
+                        'modified': search_cache.get('created_time', ''),
+                        'raw_url': proxied_url,
+                        'sign': '',
+                        'header': {}
+                    }
+            
+            # 如果没有缓存，执行搜索并缓存结果
+            logger.info(f"🔍 执行123网盘搜索: {file_name}")
+            
+            search_result = self.client.fs_list_new({
+                'SearchData': file_name,
+                'limit': 10
+            })
+            
+            if search_result and search_result.get('code') == 0:
+                items = search_result.get('data', {}).get('InfoList', [])
+                
+                # 查找精确匹配并缓存
+                for item in items:
+                    if item.get('FileName') == file_name and item.get('Type') == 0:
+                        file_id = item['FileId']
+                        
+                        # 缓存搜索结果（1小时）
+                        self._cache_file_search(file_name, {
+                            'file_id': file_id,
+                            'file_size': item.get('Size', 0),
+                            'created_time': item.get('CreateAt', ''),
+                            'parent_id': item.get('ParentFileId', '')
+                        })
+                        
+                        logger.info(f"📝 文件搜索结果已缓存: {file_name}")
+                        
+                        # 获取下载链接
+                        download_url = self.client.download_url({'FileID': file_id})
+                        
+                        if download_url:
+                            proxied_url = self._proxy_download_url(download_url)
+                            
+                            return {
+                                'name': file_name,
+                                'size': item.get('Size', 0),
+                                'is_dir': False,
+                                'modified': item.get('CreateAt', ''),
+                                'raw_url': proxied_url,
+                                'sign': '',
+                                'header': {}
+                            }
+                        break
+            
+            logger.warning(f"⚠️ 快速代理获取失败: {file_name}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ 快速代理下载异常: {e}")
+            return None
+    
+    def _get_cached_file_search(self, file_name):
+        """获取缓存的文件搜索结果"""
+        try:
+            from database.database import get_db_manager
+            db = get_db_manager()
+            return db.get_file_search_cache(file_name)
+        except Exception:
+            return None
+    
+    def _cache_file_search(self, file_name, file_info):
+        """缓存文件搜索结果"""
+        try:
+            from database.database import get_db_manager
+            db = get_db_manager()
+            
+            db.set_file_search_cache(
+                filename=file_name,
+                file_id=file_info['file_id'],
+                file_size=file_info.get('file_size'),
+                parent_id=file_info.get('parent_id'),
+                created_time=file_info.get('created_time'),
+                expire_seconds=3600  # 1小时缓存
+            )
+            return True
+        except Exception as e:
+            logger.warning(f"⚠️ 缓存文件搜索失败: {e}")
+            return False
 
     def _can_build_from_domain_path(self):
         """判断是否可通过自定义域名 + 路径直出"""

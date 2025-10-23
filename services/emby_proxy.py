@@ -27,28 +27,25 @@ class EmbyProxyService:
         self.strm_parser_service = StrmParserService()
         self.alist_api_service = AlistApiService()
         self.emby_session = None
+        
         # itemId 热路径缓存：减少重复 Items 查询
         self.item_path_cache = {}
         self.item_path_cache_ttl = 60  # 秒
+        
         # 🚀 永久路径数据库：完全跳过Emby API查询
         from utils.item_path_db import ItemPathDatabase
         self.item_path_db = ItemPathDatabase()
-        # 客户端连接跟踪
-        self.connected_clients = {}
-        self.client_last_seen = {}
         
-        # 用户历史记录
-        self.user_history = {}  # 用户历史记录 {user_id: {devices: [], ips: [], last_seen: timestamp}}
+        # 🚀 SQLite 数据库管理器：高性能数据存储
+        from database.database import get_db_manager
+        self.db = get_db_manager()
         
-        # 持久化存储文件路径
+        # 兼容性：从旧的JSON文件迁移数据
         self.history_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'user_history.json')
+        self._migrate_user_history()
         
-        # 加载历史记录
-        self.load_user_history()
-        
-        # 定期保存计数器
-        self.save_counter = 0
-        self.save_interval = 10  # 每10次记录后保存一次
+        # 连接超时设置（秒）
+        self.connection_timeout = 300  # 5分钟
 
     def get_emby_session(self):
         """获取或创建 Emby 代理会话（支持连接池和重试）"""
@@ -546,7 +543,7 @@ class EmbyProxyService:
                 
                 if not direct_url:
                     # 如果快速构建失败，降级到标准方法（可能需要API查询）
-                    logger.debug(f"快速构建失败，使用标准方法")
+                    logger.warning(f"⚠️ 快速直连构建失败，降级到API查询模式")
                     direct_url = self.get_direct_url_from_pan(mapped_path, config)
                 
                 if direct_url:
@@ -664,15 +661,69 @@ class EmbyProxyService:
             
             if secret_key and uid:
                 authed_url = auth_manager.add_auth_to_url(direct_url, secret_key, uid, expire_time)
-                logger.debug(f"⚡ 快速构建直链: {file_path[:50]}...")
-                return authed_url
+                
+                # 🛡️ 智能域名健康检查（优化超时时间）
+                if self._check_domain_health(domain):
+                    logger.debug(f"⚡ 快速构建直链: {file_path[:50]}...")
+                    return authed_url
+                else:
+                    logger.warning(f"⚠️ 域名健康检查失败，快速降级")
+                    return None  # 返回None让上层降级到标准方法
             else:
                 logger.warning(f"⚠️ URL鉴权配置不完整")
-                return direct_url
+                return None
                 
         except Exception as e:
             logger.error(f"❌ 快速构建直链失败: {e}")
             return None
+    
+    def _check_domain_health(self, domain):
+        """智能域名健康检查（带缓存）"""
+        try:
+            import time
+            import requests
+            
+            # 检查域名健康状态缓存
+            cache_key = f"domain_health:{domain}"
+            health_cache = self.db.get_direct_link(cache_key)
+            
+            current_time = time.time()
+            
+            # 如果有缓存且未过期，直接使用缓存结果
+            if health_cache and health_cache['expire_time'] > current_time:
+                is_healthy = health_cache['url'] == 'healthy'
+                logger.debug(f"🎯 域名健康缓存命中: {domain} -> {'健康' if is_healthy else '不健康'}")
+                return is_healthy
+            
+            # 执行快速健康检查
+            try:
+                # 使用更短的超时时间和更简单的检查
+                test_url = f"https://{domain}/"
+                logger.debug(f"🧪 域名健康检查: {domain}")
+                
+                response = requests.head(test_url, timeout=0.5, allow_redirects=False)
+                # 任何响应（包括404）都说明域名可达
+                is_healthy = True
+                
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                # 超时或连接失败说明域名不可达
+                is_healthy = False
+            except Exception:
+                # 其他异常也认为域名有问题
+                is_healthy = False
+            
+            # 缓存健康状态（健康缓存5分钟，不健康缓存30秒）
+            cache_duration = 300 if is_healthy else 30
+            cache_value = 'healthy' if is_healthy else 'unhealthy'
+            self.db.set_direct_link(cache_key, cache_value, cache_duration)
+            
+            logger.debug(f"📝 域名健康状态已缓存: {domain} -> {'健康' if is_healthy else '不健康'} ({cache_duration}s)")
+            
+            return is_healthy
+            
+        except Exception as e:
+            logger.warning(f"⚠️ 域名健康检查异常: {e}")
+            return False  # 异常时保守降级
     
     def get_direct_url_from_pan(self, alist_path, config):
         """从网盘获取文件直链（优先使用搜索）"""
@@ -772,8 +823,20 @@ class EmbyProxyService:
         try:
             # 获取客户端拦截配置
             client_filter = config.get('emby', {}).get('client_filter', {})
+            
+            # 🔍 调试：记录拦截配置状态
+            logger.info(f"🛡️ 拦截检查 - enable: {client_filter.get('enable', False)}, mode: {client_filter.get('mode', 'none')}")
+            
             if not client_filter.get('enable', False):
+                logger.debug(f"✅ 拦截未启用，允许所有客户端")
                 return True  # 未启用拦截，允许所有客户端
+            
+            client_name = client_info.get('client', '')
+            device_name = client_info.get('device', '')
+            ip_address = client_info.get('ip', '')
+            
+            # 🔍 调试：记录被检查的客户端信息
+            logger.info(f"🔍 检查客户端 - Name: '{client_name}', Device: '{device_name}', IP: '{ip_address}'")
             
             # 黑名单模式
             if client_filter.get('mode') == 'blacklist':
@@ -781,21 +844,25 @@ class EmbyProxyService:
                 blocked_devices = client_filter.get('blocked_devices', [])
                 blocked_ips = client_filter.get('blocked_ips', [])
                 
+                # 🔍 调试：记录黑名单内容
+                logger.info(f"📋 黑名单检查 - blocked_clients: {blocked_clients}, blocked_devices: {blocked_devices}, blocked_ips: {blocked_ips}")
+                
                 # 检查客户端名称
-                if client_info.get('client', '').lower() in [c.lower() for c in blocked_clients]:
-                    logger.warning(f"🚫 客户端被拦截: {client_info.get('client')}")
+                if client_name.lower() in [c.lower() for c in blocked_clients]:
+                    logger.warning(f"🚫 客户端被拦截: {client_name}")
                     return False
                 
-                # 检查设备名称
-                if client_info.get('device', '').lower() in [d.lower() for d in blocked_devices]:
-                    logger.warning(f"🚫 设备被拦截: {client_info.get('device')}")
+                # 检查设备名称  
+                if device_name.lower() in [d.lower() for d in blocked_devices]:
+                    logger.warning(f"🚫 设备被拦截: {device_name}")
                     return False
                 
                 # 检查IP地址
-                if client_info.get('ip') in blocked_ips:
-                    logger.warning(f"🚫 IP被拦截: {client_info.get('ip')}")
+                if ip_address in blocked_ips:
+                    logger.warning(f"🚫 IP被拦截: {ip_address}")
                     return False
                 
+                logger.debug(f"✅ 客户端通过黑名单检查: {client_name}")
                 return True
             
             # 白名单模式
@@ -895,6 +962,61 @@ class EmbyProxyService:
         except Exception as e:
             logger.debug(f"获取用户名异常: {e}")
             return 'Unknown User'
+     
+    def _get_real_username_from_emby(self, user_id):
+        """从Emby API获取真实用户名"""
+        try:
+            config = self.config_manager.load_config()
+            emby_server = config['emby']['server']
+            api_key = config['emby']['api_key']
+            
+            if not emby_server or not api_key:
+                return None
+            
+            # 调用Emby用户API
+            import requests
+            user_url = f"{emby_server}/emby/Users/{user_id}?api_key={api_key}"
+            
+            response = requests.get(user_url, timeout=2)
+            if response.status_code == 200:
+                user_data = response.json()
+                username = user_data.get('Name', '')
+                if username:
+                    logger.debug(f"📋 从Emby获取用户名: {username}")
+                    return username
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"从Emby获取用户名失败: {e}")
+            return None
+    
+    def _get_username_from_token(self, token):
+        """从Token获取用户名"""
+        try:
+            config = self.config_manager.load_config()
+            emby_server = config['emby']['server']
+            
+            if not emby_server or not token:
+                return None
+            
+            # 使用Token调用用户信息API
+            import requests
+            auth_url = f"{emby_server}/emby/Users/Me?api_key={token}"
+            
+            response = requests.get(auth_url, timeout=2)
+            if response.status_code == 200:
+                user_data = response.json()
+                username = user_data.get('Name', '')
+                if username:
+                    logger.debug(f"🔑 从Token获取用户名: {username}")
+                    return username
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"从Token获取用户名失败: {e}")
+            return None
 
     def track_client_connection(self, client_info, request):
         """跟踪客户端连接"""
@@ -902,170 +1024,142 @@ class EmbyProxyService:
             import time
             current_time = time.time()
             
+            # 🔍 调试：详细记录输入信息
+            logger.info(f"🔧 跟踪输入 - client_info: {client_info}")
+            
             # 过滤无效的客户端信息
             client_name = client_info.get('client', '').strip()
             device_name = client_info.get('device', '').strip()
             device_id = client_info.get('device_id', '').strip()
             
+            # 🔍 调试：记录处理后的信息
+            logger.info(f"📝 处理后信息 - client: '{client_name}', device: '{device_name}', device_id: '{device_id}'")
+            
             # 如果客户端信息为空，跳过记录
             if not client_name or not device_id:
+                logger.warning(f"⚠️ 客户端信息不完整，跳过跟踪 - client_name: '{client_name}', device_id: '{device_id}'")
                 return
             
             # 生成客户端唯一标识（使用device_id作为主要标识）
             client_key = device_id
             
-            # 获取用户名
+            # 获取用户名（增强版）
             username = self.get_username_from_request(request)
+            
+            # 🔍 调试：记录用户名获取结果
+            logger.info(f"👤 获取到用户名: '{username}'")
             
             # 记录用户历史
             self.record_user_history(username, client_info)
             
-            # 更新客户端信息
-            self.connected_clients[client_key] = {
-                'client': client_name or 'Unknown',
-                'device': device_name or 'Unknown',
-                'device_id': device_id or 'Unknown',
-                'version': client_info.get('version', 'Unknown'),
-                'ip': client_info.get('ip', 'Unknown'),
-                'user_agent': client_info.get('user_agent', ''),
-                'username': username,
-                'token': client_info.get('token', ''),
-                'last_seen': current_time,
-                'first_seen': self.client_last_seen.get(client_key, current_time)
-            }
+            # 更新客户端连接信息（SQLite版本）
+            success = self.db.add_client_connection(
+                connection_id=client_key,
+                user_id=username,
+                device_id=device_id or 'Unknown',
+                device_name=device_name or 'Unknown',
+                client_name=client_name or 'Unknown',
+                client_version=client_info.get('version', 'Unknown'),
+                ip_address=client_info.get('ip', 'Unknown'),
+                user_agent=client_info.get('user_agent', 'Unknown')
+            )
             
-            # 记录首次连接
-            if client_key not in self.client_last_seen:
-                self.client_last_seen[client_key] = current_time
-                logger.info(f"📱 新客户端: {client_name} ({device_name}) - {username}")
+            if success:
+                logger.info(f"📱 客户端连接已记录: {client_name} ({device_name}) - {username}")
             
-            # 清理超过5分钟未活动的客户端（更短的清理时间）
-            cutoff_time = current_time - 300  # 5分钟
-            expired_clients = [k for k, v in self.connected_clients.items() if v['last_seen'] < cutoff_time]
-            for expired_client in expired_clients:
-                logger.debug(f"🗑️ 清理过期客户端: {expired_client}")
-                del self.connected_clients[expired_client]
-                if expired_client in self.client_last_seen:
-                    del self.client_last_seen[expired_client]
+            # 定期清理过期连接
+            self.cleanup_expired_clients()
                     
         except Exception as e:
             logger.error(f"❌ 跟踪客户端连接失败: {e}")
 
     def cleanup_expired_clients(self):
-        """主动清理过期的客户端"""
+        """清理过期的客户端连接（SQLite版本）"""
         try:
-            import time
-            current_time = time.time()
-            cutoff_time = current_time - 180  # 3分钟
-            
-            expired_clients = [k for k, v in self.connected_clients.items() if v['last_seen'] < cutoff_time]
-            for expired_client in expired_clients:
-                logger.debug(f"🗑️ 主动清理过期客户端: {expired_client}")
-                del self.connected_clients[expired_client]
-                if expired_client in self.client_last_seen:
-                    del self.client_last_seen[expired_client]
+            # 清理超过连接超时时间的连接
+            expired_count = self.db.cleanup_expired_connections(self.connection_timeout)
+            if expired_count > 0:
+                logger.debug(f"🧹 已清理 {expired_count} 个过期客户端连接")
                     
         except Exception as e:
             logger.error(f"❌ 清理过期客户端失败: {e}")
 
     def record_user_history(self, user_id, client_info):
-        """记录用户使用过的设备和IP"""
+        """记录用户使用过的设备和IP（SQLite优化版本）"""
         try:
-            import time
-            current_time = time.time()
-            
             if not user_id or user_id == 'Unknown User':
                 return
             
-            # 初始化用户历史记录
-            if user_id not in self.user_history:
-                self.user_history[user_id] = {
-                    'devices': [],
-                    'ips': [],
-                    'last_seen': current_time,
-                    'username': user_id
-                }
+            # 使用SQLite记录用户活动
+            success = self.db.add_user_activity(
+                user_id=str(user_id),
+                device_id=client_info.get('device_id', 'Unknown'),
+                device_name=client_info.get('device', 'Unknown'),
+                client_name=client_info.get('client', 'Unknown'),
+                ip_address=client_info.get('ip', None),
+                user_agent=client_info.get('user_agent', None)
+            )
             
-            # 更新最后活动时间
-            self.user_history[user_id]['last_seen'] = current_time
-            
-            # 记录设备信息
-            device_info = {
-                'client': client_info.get('client', 'Unknown'),
-                'device': client_info.get('device', 'Unknown'),
-                'device_id': client_info.get('device_id', 'Unknown'),
-                'version': client_info.get('version', 'Unknown'),
-                'first_seen': current_time,
-                'last_seen': current_time
-            }
-            
-            # 检查设备是否已存在
-            device_exists = False
-            for existing_device in self.user_history[user_id]['devices']:
-                if existing_device['device_id'] == device_info['device_id']:
-                    existing_device['last_seen'] = current_time
-                    device_exists = True
-                    break
-            
-            if not device_exists:
-                self.user_history[user_id]['devices'].append(device_info)
-                logger.debug(f"📱 新设备记录: {user_id} - {device_info['client']} ({device_info['device']})")
-            
-            # 记录IP信息
-            ip_address = client_info.get('ip', 'Unknown')
-            if ip_address != 'Unknown':
-                ip_info = {
-                    'ip': ip_address,
-                    'first_seen': current_time,
-                    'last_seen': current_time
-                }
-                
-                # 检查IP是否已存在
-                ip_exists = False
-                for existing_ip in self.user_history[user_id]['ips']:
-                    if existing_ip['ip'] == ip_address:
-                        existing_ip['last_seen'] = current_time
-                        ip_exists = True
-                        break
-                
-                if not ip_exists:
-                    self.user_history[user_id]['ips'].append(ip_info)
-                    logger.debug(f"🌐 新IP记录: {user_id} - {ip_address}")
-            
-            # 定期保存到文件（避免频繁写入）
-            self.save_counter += 1
-            if self.save_counter >= self.save_interval:
-                self.save_user_history()
-                self.save_counter = 0
+            if success:
+                logger.debug(f"📝 用户活动已记录: {user_id} - {client_info.get('client', 'Unknown')}")
             
         except Exception as e:
             logger.error(f"❌ 记录用户历史失败: {e}")
 
-    def load_user_history(self):
-        """从文件加载用户历史记录"""
+    def _migrate_user_history(self):
+        """从旧JSON文件迁移用户历史数据到SQLite"""
         try:
             if os.path.exists(self.history_file):
+                logger.info("🔄 发现旧的用户历史记录文件，开始迁移到SQLite...")
                 with open(self.history_file, 'r', encoding='utf-8') as f:
-                    self.user_history = json.load(f)
-                logger.info(f"✅ 已加载用户历史记录: {len(self.user_history)} 个用户")
-            else:
-                logger.info("📝 用户历史记录文件不存在，将创建新文件")
+                    data = json.load(f)
+                    
+                    migrated = 0
+                    for user_id, user_data in data.items():
+                        # 迁移设备记录
+                        for device in user_data.get('devices', []):
+                            success = self.db.add_user_activity(
+                                user_id=str(user_id),
+                                device_id=device.get('device_id', 'Unknown'),
+                                device_name=device.get('device', 'Unknown'),
+                                client_name=device.get('client', 'Unknown'),
+                                ip_address=None,
+                                user_agent=None
+                            )
+                            if success:
+                                migrated += 1
+                        
+                        # 迁移IP记录
+                        for ip_info in user_data.get('ips', []):
+                            success = self.db.add_user_activity(
+                                user_id=str(user_id),
+                                device_id=None,
+                                device_name=None,
+                                client_name=None,
+                                ip_address=ip_info.get('ip'),
+                                user_agent=ip_info.get('user_agent', None)
+                            )
+                            if success:
+                                migrated += 1
+                    
+                    logger.info(f"✅ 用户历史迁移完成: {migrated} 条记录")
+                    
+                    # 备份并删除旧文件
+                    backup_file = self.history_file + '.bak'
+                    os.rename(self.history_file, backup_file)
+                    logger.info(f"📦 旧历史文件已备份为: {backup_file}")
         except Exception as e:
-            logger.error(f"❌ 加载用户历史记录失败: {e}")
-            self.user_history = {}
+            logger.warning(f"⚠️ 迁移用户历史记录失败: {e}")
 
-    def save_user_history(self):
-        """保存用户历史记录到文件"""
-        try:
-            # 确保目录存在
-            os.makedirs(os.path.dirname(self.history_file), exist_ok=True)
-            
-            with open(self.history_file, 'w', encoding='utf-8') as f:
-                json.dump(self.user_history, f, ensure_ascii=False, indent=2)
-            
-            logger.debug(f"💾 已保存用户历史记录: {len(self.user_history)} 个用户")
-        except Exception as e:
-            logger.error(f"❌ 保存用户历史记录失败: {e}")
+    @property
+    def user_history(self):
+        """获取用户历史记录（兼容性属性）"""
+        return self.db.get_unique_users()
+
+    @property  
+    def connected_clients(self):
+        """获取连接的客户端（兼容性属性）"""
+        return self.db.get_active_connections(self.connection_timeout)
 
     def proxy_request(self, path=''):
         """Emby API 反向代理（独立端口，无需 /emby 前缀）"""
@@ -1084,30 +1178,40 @@ class EmbyProxyService:
         if not config['emby']['enable']:
             return jsonify({'error': 'Emby proxy is not enabled'}), 503
 
-        # 跳过客户端信息提取和跟踪（除非是重要请求）
-        # 大部分图片、字幕等请求不需要跟踪
+        # 提取客户端信息（对所有请求进行拦截检查）
+        client_info = self.extract_client_info(request)
+        
+        # 🛡️ 对所有请求都进行客户端拦截检查
+        if not self.check_client_access(client_info, config):
+            logger.warning(f"🚫 客户端访问被拒绝: {client_info.get('client', 'Unknown')} ({client_info.get('ip', 'Unknown IP')})")
+            return jsonify({'error': 'Access denied'}), 403
+        
+        # 只对重要请求进行客户端跟踪（避免过多跟踪）
         path_lower = request.path.lower()
         is_critical_request = any(keyword in path_lower for keyword in 
             ['/playbackinfo', '/playing', '/stream', '/videos/', '/download'])
         
         if is_critical_request:
-            # 提取客户端信息
-            client_info = self.extract_client_info(request)
-            
-            # 检查客户端访问权限
-            if not self.check_client_access(client_info, config):
-                logger.warning(f"🚫 客户端访问被拒绝: {client_info.get('client', 'Unknown')} ({client_info.get('ip', 'Unknown IP')})")
-                return jsonify({'error': 'Access denied'}), 403
 
-            # 只在真正重要的请求中跟踪客户端连接
+            # 🔍 捕获所有重要的客户端活动
             should_track = (
-                '/Users/' in request.path and 
-                ('UserId=' in request.query_string.decode('utf-8', errors='ignore') or
-                 '/PlaybackInfo' in request.path or
-                 '/Playing' in request.path)
+                # 播放相关请求（核心跟踪）
+                '/PlaybackInfo' in request.path or
+                '/Sessions/Playing' in request.path or
+                # 用户查询请求
+                ('/Users/' in request.path and 'UserId=' in request.query_string.decode('utf-8', errors='ignore')) or
+                # 媒体项查询（包含用户ID）
+                ('/Items/' in request.path and 'UserId=' in request.query_string.decode('utf-8', errors='ignore'))
             )
+            
+            # 🔍 调试：记录跟踪决策
+            logger.info(f"🔍 跟踪检查 - Path: {request.path[:50]}, Track: {should_track}")
+            
             if should_track:
+                logger.info(f"📱 开始跟踪客户端连接...")
                 self.track_client_connection(client_info, request)
+            else:
+                logger.debug(f"⏭️ 跳过跟踪: {request.path}")
 
         emby_server = config['emby']['server'].rstrip('/')
 

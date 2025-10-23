@@ -99,12 +99,12 @@ function updateStatusBadges(data) {
 function updateDashboard(data) {
     // 更新仪表盘统计数据
     if (data.service) {
-        document.getElementById('service-port').textContent = data.service.port || '5245';
+        document.getElementById('service-port-display').textContent = data.service.port || '5245';
     }
     
     if (data.emby) {
-        document.getElementById('emby-server').textContent = data.emby.server || '未配置';
-        document.getElementById('emby-port').textContent = data.emby.port || '8096';
+        document.getElementById('emby-server-display').textContent = data.emby.server || '未配置';
+        document.getElementById('emby-port-display').textContent = data.emby.port || '8096';
     }
 }
 
@@ -127,8 +127,19 @@ async function loadConfig() {
 function populateConfigForm(config) {
     // Emby配置
     document.getElementById('emby-enable').checked = config.emby?.enable || false;
-    document.getElementById('emby-server').value = config.emby?.server || '';
-    document.getElementById('emby-api-key').value = config.emby?.api_key === '******' ? '******' : (config.emby?.api_key || '');
+    
+    // 只有在输入框为空时才填充服务器地址（避免覆盖用户输入）
+    const serverInput = document.getElementById('emby-server');
+    if (!serverInput.value || serverInput.value.trim() === '') {
+        serverInput.value = config.emby?.server || '';
+    }
+    
+    // 只有在输入框为空时才填充API密钥（避免覆盖用户输入）
+    const apiKeyInput = document.getElementById('emby-api-key');
+    if (!apiKeyInput.value || apiKeyInput.value.trim() === '' || apiKeyInput.value === '******') {
+        apiKeyInput.value = config.emby?.api_key === '******' ? '******' : (config.emby?.api_key || '');
+    }
+    
     document.getElementById('emby-port').value = config.emby?.port || 8096;
     
     // 路径映射
@@ -138,17 +149,40 @@ function populateConfigForm(config) {
     
     // 123网盘配置
     document.getElementById('pan-enable').checked = config['123']?.enable || false;
-    document.getElementById('client-id').value = config['123']?.client_id || '';
-    document.getElementById('client-secret').value = config['123']?.client_secret || '';
+    
+    // 只有在输入框为空时才填充（避免覆盖用户输入）
+    const clientIdInput = document.getElementById('client-id');
+    if (!clientIdInput.value || clientIdInput.value.trim() === '') {
+        clientIdInput.value = config['123']?.client_id || '';
+    }
+    
+    const clientSecretInput = document.getElementById('client-secret');
+    if (!clientSecretInput.value || clientSecretInput.value.trim() === '' || clientSecretInput.value === '******') {
+        clientSecretInput.value = config['123']?.client_secret || '';
+    }
+    
     document.getElementById('mount-path').value = config['123']?.mount_path || '/123';
     document.getElementById('download-mode').value = config['123']?.download_mode || 'direct';
     
     // URL鉴权
     document.getElementById('url-auth-enable').checked = config['123']?.url_auth?.enable || false;
-    document.getElementById('secret-key').value = config['123']?.url_auth?.secret_key === '******' ? '******' : (config['123']?.url_auth?.secret_key || '');
-    document.getElementById('uid').value = config['123']?.url_auth?.uid || '';
+    
+    const secretKeyInput = document.getElementById('secret-key');
+    if (!secretKeyInput.value || secretKeyInput.value.trim() === '' || secretKeyInput.value === '******') {
+        secretKeyInput.value = config['123']?.url_auth?.secret_key === '******' ? '******' : (config['123']?.url_auth?.secret_key || '');
+    }
+    
+    const uidInput = document.getElementById('uid');
+    if (!uidInput.value || uidInput.value.trim() === '') {
+        uidInput.value = config['123']?.url_auth?.uid || '';
+    }
+    
     document.getElementById('expire-time').value = config['123']?.url_auth?.expire_time || 3600;
-    document.getElementById('custom-domains').value = config['123']?.url_auth?.custom_domains?.join(',') || '';
+    
+    const domainsInput = document.getElementById('custom-domains');
+    if (!domainsInput.value || domainsInput.value.trim() === '') {
+        domainsInput.value = config['123']?.url_auth?.custom_domains?.join(',') || '';
+    }
     
     // 服务配置
     document.getElementById('service-port').value = config.service?.port || 5245;
@@ -783,16 +817,29 @@ function formatTime(seconds) {
 
 function formatDateTime(timestamp) {
     if (!timestamp) return '--';
-    const date = new Date(timestamp);
+    
+    // 🕒 修复：SQLite存储Unix时间戳（秒），JavaScript需要毫秒
+    const date = new Date(timestamp * 1000);  // 转换为毫秒
+    
+    // 验证时间戳有效性
+    if (isNaN(date.getTime())) {
+        return '时间无效';
+    }
+    
     const now = new Date();
     const diff = Math.floor((now - date) / 1000);
+    
+    // 如果时间差异过大（超过10年），可能是格式错误
+    if (Math.abs(diff) > 315360000) {  // 10年的秒数
+        return date.toLocaleString('zh-CN');
+    }
     
     if (diff < 60) return '刚刚';
     if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
     if (diff < 604800) return `${Math.floor(diff / 86400)}天前`;
     
-    return date.toLocaleDateString('zh-CN');
+    return date.toLocaleString('zh-CN');
 }
 
 function escapeHtml(text) {

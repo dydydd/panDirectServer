@@ -6,6 +6,9 @@ requests==2.31.0
 httpx[http2]==0.25.2
 h2==4.1.0
 
+# SQLite 数据库（Python内置，无需额外安装）
+# 高性能数据存储，提升程序速度
+
 # p123client 安装说明：
 # 方式1（推荐）：从Git子模块安装
 #   git submodule update --init --recursive

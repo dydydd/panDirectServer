@@ -38,20 +38,28 @@ venv.bak/
 *~
 .DS_Store
 
-# Project specific - Configuration files with sensitive data
+# SQLite数据库文件（包含用户数据和配置）
+config/*.db*
+config/*.sqlite*
+config/.sqlite_only
+config/.standard_sqlite
+
+# 用户配置和数据文件
 config/config.json
 config/*-token.txt
 config/*-cookies.txt
 config/123-token.txt
 config/115-cookies.txt
 
-# Project specific - Cache and database files
-config/fileid_cache.json
-config/item_path_db.json
-config/user_history.json
-config/*.db
-config/*.sqlite
+# 配置备份和缓存文件
+config/backups/
+config/migration_backup/
+config/*_backup*
+config/*.backup
 config/*.cache
+config/fileid_cache.json
+config/item_path_db.json  
+config/user_history.json
 
 # Project specific - Logs
 logs/
