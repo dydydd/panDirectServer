@@ -1295,8 +1295,11 @@ class EmbyProxyService:
                 direct_url = self.handle_emby_video_redirect(path)
                 if direct_url:
                     return redirect(direct_url, code=302)
+                elif direct_url is None:
+                    # None表示本地资源，直接走代理播放，不输出警告
+                    logger.debug(f"🏠 本地资源直接走代理播放")
                 else:
-                    logger.warning(f"⚠️ 未获取到直链，回退到普通代理")
+                    logger.warning(f"⚠️ 网盘资源获取直链失败，回退到普通代理")
             except Exception as e:
                 logger.error(f"❌ 302 重定向失败: {e}, 回退到普通代理")
 
