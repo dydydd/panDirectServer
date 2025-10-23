@@ -159,8 +159,8 @@ class AlistApiService:
         """应用路径映射，将虚拟路径转换为真实URL"""
         try:
             if not config['emby']['path_mapping']['enable']:
-                logger.info(f"路径映射未启用")
-                return None
+                logger.info(f"路径映射未启用，所有资源走本地代理")
+                return 'LOCAL_PROXY'
 
             from_prefix = config['emby']['path_mapping']['from']
             to_prefix = config['emby']['path_mapping']['to']
@@ -174,12 +174,12 @@ class AlistApiService:
 
             # 执行路径映射
             if not file_path.startswith(from_prefix):
-                logger.warning(f"路径不匹配映射前缀: {file_path} (前缀: {from_prefix})")
-                return None
+                logger.info(f"路径不匹配网盘前缀，走本地代理: {file_path[:50]}... (前缀: {from_prefix})")
+                return 'LOCAL_PROXY'
 
-            # 替换路径前缀
+            # 替换路径前缀 - 这是网盘资源
             mapped_path = file_path.replace(from_prefix, to_prefix, 1)
-            logger.debug(f"路径映射: {file_path} -> {mapped_path}")
+            logger.debug(f"网盘路径映射: {file_path} -> {mapped_path}")
 
             # 缓存结果
             expire_time = config['emby'].get('cache_expire_time', 3600)
@@ -190,4 +190,4 @@ class AlistApiService:
 
         except Exception as e:
             logger.error(f"❌ 路径映射异常: {e}")
-            return None
+            return 'LOCAL_PROXY'  # 异常时也走本地代理

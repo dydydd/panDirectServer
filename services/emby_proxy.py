@@ -159,11 +159,14 @@ class EmbyProxyService:
             logger.debug(f"📁 原始路径: {original_path}")
 
             mapped_url = self.alist_api_service.apply_path_mapping(original_path, config)
-            if not mapped_url:
+            if mapped_url == 'LOCAL_PROXY':
+                logger.info(f"📁 本地STRM文件，跳过处理: {source.get('Name', 'Unknown')}")
+                return  # 本地STRM文件不处理，保持原样
+            elif not mapped_url:
                 logger.error(f"❌ Alist路径映射失败")
                 return
             real_url = mapped_url
-            logger.debug(f"🔄 Alist路径映射成功: {original_path[:50]}... -> {mapped_url[:50]}...")
+            logger.debug(f"🔄 网盘STRM路径映射成功: {original_path[:50]}... -> {mapped_url[:50]}...")
 
             if not real_url:
                 logger.error(f"❌ 无法解析 .strm 直链")
@@ -402,7 +405,10 @@ class EmbyProxyService:
                 
                 # 应用路径映射
                 mapped_path = self.apply_path_mapping(db_path, config)
-                if mapped_path:
+                if mapped_path == 'LOCAL_PROXY':
+                    logger.info(f"📁 本地资源(数据库)，走代理播放: {os.path.basename(db_path)}")
+                    return None  # 本地资源走代理
+                elif mapped_path:
                     # 快速构建直链
                     direct_url = self._fast_build_direct_url(mapped_path, config)
                     if direct_url:
@@ -532,8 +538,11 @@ class EmbyProxyService:
                 # 应用路径映射
                 mapped_path = self.apply_path_mapping(emby_file_path, config)
                 
-                if not mapped_path:
-                    logger.warning(f"路径映射失败或未启用")
+                if mapped_path == 'LOCAL_PROXY':
+                    logger.info(f"📁 本地资源，走代理播放: {os.path.basename(emby_file_path)}")
+                    return None  # 返回None让上层继续走代理播放
+                elif not mapped_path:
+                    logger.warning(f"路径映射失败")
                     return None
                 
                 logger.debug(f"映射后的网盘路径: {mapped_path}")
@@ -588,8 +597,8 @@ class EmbyProxyService:
         """应用路径映射，将本地路径转换为网络URL"""
         try:
             if not config['emby']['path_mapping']['enable']:
-                logger.info(f"路径映射未启用")
-                return None
+                logger.info(f"路径映射未启用，所有资源走本地代理")
+                return 'LOCAL_PROXY'  # 特殊标识：本地代理播放
 
             from_prefix = config['emby']['path_mapping']['from']
             to_prefix = config['emby']['path_mapping']['to']
@@ -599,18 +608,18 @@ class EmbyProxyService:
             from_path_normalized = from_prefix.replace('\\', '/')
 
             if not emby_path_normalized.startswith(from_path_normalized):
-                logger.warning(f"路径不匹配映射前缀: {original_path} (前缀: {from_prefix})")
-                return None
+                logger.info(f"路径不匹配网盘前缀，走本地代理: {original_path[:50]}... (前缀: {from_prefix})")
+                return 'LOCAL_PROXY'  # 特殊标识：本地代理播放
 
-            # 替换路径前缀
+            # 替换路径前缀 - 这是网盘资源
             mapped_path = emby_path_normalized.replace(from_path_normalized, to_prefix, 1)
-            logger.debug(f"✅ 路径映射成功: {original_path[:50]}... => {mapped_path[:50]}...")
+            logger.debug(f"✅ 网盘路径映射成功: {original_path[:50]}... => {mapped_path[:50]}...")
 
             return mapped_path
 
         except Exception as e:
             logger.error(f"❌ 路径映射异常: {e}")
-            return None
+            return 'LOCAL_PROXY'  # 异常时也走本地代理
     
     def _fast_build_direct_url(self, mapped_path, config):
         """
