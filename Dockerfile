@@ -16,25 +16,17 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制整个项目（包括子模块）
-COPY . .
-
-# 初始化Git子模块（如果还没初始化）
-RUN if [ -f .gitmodules ]; then \
-        git config --global --add safe.directory /app && \
-        git submodule update --init --recursive || true; \
-    fi
+# 复制 requirements.txt
+COPY requirements.txt .
 
 # 安装基础依赖
-RUN grep -v "^-e" requirements.txt > requirements-base.txt && \
-    pip install --no-cache-dir -r requirements-base.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 安装p123client子模块
-RUN if [ -d "p123client" ]; then \
-        pip install --no-cache-dir ./p123client; \
-    else \
-        echo "Warning: p123client submodule not found"; \
-    fi
+# 安装 p123client（直接从 GitHub）
+RUN pip install --no-cache-dir git+https://github.com/dydydd/p123client.git
+
+# 复制应用代码
+COPY . .
 
 # 创建必要的目录
 RUN mkdir -p /app/config /app/logs

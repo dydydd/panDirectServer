@@ -21,7 +21,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-          repository: ${{ secrets.DOCKER_USERNAME }}/pandirectserver
+          repository: dydydd/pandirectserver
           short-description: 'Emby 代理服务器，支持 123 网盘直链播放，极致优化播放速度'
           readme-filepath: ./README.Docker.md
 
