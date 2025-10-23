@@ -3,6 +3,8 @@
 🚀 一个强大的Emby媒体服务器代理工具，支持123网盘直链播放，极致优化播放速度。
 
 [![Docker Build](https://github.com/dydydd/panDirectServer/actions/workflows/docker-build.yml/badge.svg)](https://github.com/dydydd/panDirectServer/actions/workflows/docker-build.yml)
+[![Docker Pulls](https://img.shields.io/docker/pulls/dydydd/pandirectserver)](https://hub.docker.com/r/dydydd/pandirectserver)
+[![Docker Image Size](https://img.shields.io/docker/image-size/dydydd/pandirectserver/latest)](https://hub.docker.com/r/dydydd/pandirectserver)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 
