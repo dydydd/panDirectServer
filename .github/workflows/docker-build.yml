@@ -13,6 +13,10 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   DOCKER_IMAGE_NAME: pandirectserver
   DOCKER_PLATFORMS: linux/amd64,linux/arm64
@@ -53,7 +57,7 @@ jobs:
         with:
           images: |
             ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
-            ghcr.io/${{ github.repository }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.DOCKER_IMAGE_NAME }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -76,4 +80,14 @@ jobs:
       - name: Image digest
         if: github.event_name != 'pull_request'
         run: echo "Image pushed with digest ${{ steps.docker_build.outputs.digest }}"
+
+      - name: Update Docker Hub Description
+        if: github.event_name != 'pull_request'
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
+          short-description: 'Emby 代理服务器，支持 123 网盘直链播放，极致优化播放速度'
+          readme-filepath: ./README.md
 
