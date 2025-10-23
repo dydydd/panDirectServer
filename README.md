@@ -6,7 +6,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/dydydd/pandirectserver)](https://hub.docker.com/r/dydydd/pandirectserver)
 [![Docker Image Size](https://img.shields.io/docker/image-size/dydydd/pandirectserver/latest)](https://hub.docker.com/r/dydydd/pandirectserver)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
 
 ## ✨ 特性
 

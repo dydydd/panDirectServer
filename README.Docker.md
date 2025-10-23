@@ -388,7 +388,7 @@ docker run -d \
 ---
 
 **构建信息**：
-- 基础镜像：`python:3.11-slim`
+- 基础镜像：`python:3.12-slim`
 - 支持架构：`linux/amd64`, `linux/arm64`
 - 自动构建：GitHub Actions
 - 镜像大小：~200MB
