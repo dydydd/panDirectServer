@@ -5,4 +5,11 @@ Werkzeug==3.0.1
 requests==2.31.0
 httpx[http2]==0.25.2
 h2==4.1.0
-# p123client 通过 Git 子模块安装，见 Dockerfile
+
+# p123client 安装说明：
+# 方式1（推荐）：从Git子模块安装
+#   git submodule update --init --recursive
+#   pip install -e ./p123client
+#
+# 方式2：直接从GitHub安装
+#   pip install git+https://github.com/dydydd/p123client.git

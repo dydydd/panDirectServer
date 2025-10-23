@@ -64,24 +64,116 @@ docker-compose up -d
 
 ### 手动部署
 
+#### 方式1：使用Git子模块（推荐）
+
 ```bash
 # 1. 克隆仓库（包含子模块）
 git clone --recursive https://github.com/dydydd/panDirectServer.git
 cd panDirectServer
 
 # 如果已经克隆但忘记了 --recursive，可以执行：
-git submodule update --init --recursive
+# git submodule update --init --recursive
 
-# 2. 安装p123client依赖（子模块）
-cd p123client
-pip install -e .
+# 2. 创建Python虚拟环境（可选但推荐）
+python -m venv venv
 
-# 3. 安装panDirectServer依赖
-cd ..
+# Windows
+venv\Scripts\activate
+
+# Linux/Mac
+# source venv/bin/activate
+
+# 3. 安装基础依赖
 pip install -r requirements.txt
 
-# 4. 启动服务
+# 4. 安装p123client（从子模块）
+pip install -e ./p123client
+
+# 5. 创建配置文件
+mkdir -p config logs
+cp config/config.json.example config/config.json
+
+# 6. 编辑配置文件（填入你的123网盘和Emby信息）
+# nano config/config.json  # Linux/Mac
+# notepad config\config.json  # Windows
+
+# 7. 启动服务
 python app.py
+```
+
+#### 方式2：不使用Git子模块
+
+如果不想使用Git子模块，可以直接从GitHub安装p123client：
+
+```bash
+# 1. 克隆仓库（不包含子模块）
+git clone https://github.com/dydydd/panDirectServer.git
+cd panDirectServer
+
+# 2. 创建Python虚拟环境（可选但推荐）
+python -m venv venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Linux/Mac
+
+# 3. 安装所有依赖（包括从GitHub安装p123client）
+pip install -r requirements.txt
+pip install git+https://github.com/dydydd/p123client.git
+
+# 4. 创建配置文件
+mkdir -p config logs
+cp config/config.json.example config/config.json
+
+# 5. 编辑配置文件
+# nano config/config.json
+
+# 6. 启动服务
+python app.py
+```
+
+#### 访问服务
+
+- 主服务管理界面：http://localhost:5245
+- Emby代理地址：http://localhost:8096
+
+#### Windows 快速启动
+
+创建 `start.bat`：
+```batch
+@echo off
+cd /d %~dp0
+if not exist venv (
+    python -m venv venv
+    call venv\Scripts\activate
+    pip install -r requirements.txt
+    pip install git+https://github.com/dydydd/p123client.git
+)
+call venv\Scripts\activate
+python app.py
+pause
+```
+
+双击 `start.bat` 即可启动服务。
+
+#### Linux/Mac 快速启动
+
+创建 `start.sh`：
+```bash
+#!/bin/bash
+cd "$(dirname "$0")"
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    pip install git+https://github.com/dydydd/p123client.git
+fi
+source venv/bin/activate
+python app.py
+```
+
+然后执行：
+```bash
+chmod +x start.sh
+./start.sh
 ```
 
 ## ⚙️ 配置说明
@@ -359,11 +451,11 @@ docker buildx build \
 
 ## 📝 许可证
 
-本项目采用 MIT 许可证，详见 [LICENSE](../LICENSE) 文件。
+本项目采用 MIT 许可证。
 
 ## 🙏 致谢
 
-- [p123client](../p123client) - 123网盘Python客户端
+- [p123client](https://github.com/dydydd/p123client) - 123网盘Python客户端（Git子模块）
 - [Flask](https://flask.palletsprojects.com/) - Web框架
 - [Emby](https://emby.media/) - 媒体服务器
 
