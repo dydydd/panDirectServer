@@ -1,0 +1,8 @@
+Flask==3.0.0
+flask-cors==4.0.0
+PyJWT==2.8.0
+Werkzeug==3.0.1
+requests==2.31.0
+httpx[http2]==0.25.2
+h2==4.1.0
+# p123client 通过 Git 子模块安装，见 Dockerfile

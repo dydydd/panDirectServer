@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  pandirectserver:
+    # 使用预构建镜像（推荐），或者取消注释下面的 build 行来本地构建
+    # image: ghcr.io/dydydd/pandirectserver:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pandirectserver
+    restart: unless-stopped
+    ports:
+      - "5245:5245"  # 主服务端口
+      - "8096:8096"  # Emby代理端口
+    volumes:
+      - ./config:/app/config:rw
+      - ./logs:/app/logs:rw
+    environment:
+      - TZ=Asia/Shanghai  # 设置时区
+      - LOG_LEVEL=INFO    # 日志级别
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5245/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - pandirectserver-network
+
+networks:
+  pandirectserver-network:
+    driver: bridge

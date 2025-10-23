@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>panDirectServer - 管理面板</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <div class="logo-section">
+                <div class="logo">🚀</div>
+                <div class="title">
+                    <h1>panDirectServer</h1>
+                    <p>123网盘直链播放 - 管理面板</p>
+                </div>
+            </div>
+            <div class="status-badges">
+                <span id="service-status" class="badge badge-success"><span>●</span> 服务运行中</span>
+                <span id="emby-status" class="badge badge-warning"><span>●</span> Emby未配置</span>
+                <span id="pan-status" class="badge badge-warning"><span>●</span> 未连接</span>
+            </div>
+        </header>
+
+        <!-- 提示框 -->
+        <div id="alert" class="alert">
+            <span id="alert-text"></span>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 侧边栏导航 -->
+            <aside class="sidebar">
+                <div class="nav-section">
+                    <div class="nav-title">主菜单</div>
+                    <div class="nav-item active" onclick="showSection('dashboard')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                        </svg>
+                        仪表盘
+                    </div>
+                    <div class="nav-item" onclick="showSection('emby')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                        Emby设置
+                    </div>
+                    <div class="nav-item" onclick="showSection('pan')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                            <polyline points="13 2 13 9 20 9"></polyline>
+                        </svg>
+                        123网盘
+                    </div>
+                    <div class="nav-item" onclick="showSection('service')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6m4.22-13.22l-4.24 4.24m0 6l-4.24 4.24M23 12h-6m-6 0H5m13.22 4.22l-4.24-4.24m0-6l-4.24-4.24"></path>
+                        </svg>
+                        服务设置
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">高级功能</div>
+                    <div class="nav-item" onclick="showSection('devices')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                        </svg>
+                        设备管理
+                    </div>
+                    <div class="nav-item" onclick="showSection('intercept')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        客户端拦截
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 内容面板 -->
+            <main>
+                <!-- 仪表盘 -->
+                <div id="dashboard-section" class="content-panel section">
+                    <div class="panel-header">
+                        <h2>📊 仪表盘</h2>
+                        <p>系统运行状态总览</p>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="card">
+                            <div class="card-title">🚀 服务信息</div>
+                            <p><strong>主服务端口:</strong> <span id="service-port">5245</span></p>
+                            <p><strong>日志级别:</strong> INFO</p>
+                            <p><strong>运行状态:</strong> 正常</p>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-title">🎬 Emby信息</div>
+                            <p><strong>服务器:</strong> <span id="emby-server">未配置</span></p>
+                            <p><strong>代理端口:</strong> <span id="emby-port">8096</span></p>
+                            <p><strong>连接状态:</strong> <span id="emby-connection">未知</span></p>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-title">☁️ 123网盘</div>
+                            <p><strong>挂载路径:</strong> /123</p>
+                            <p><strong>下载模式:</strong> 直链模式</p>
+                            <p><strong>连接状态:</strong> <span id="pan-connection">未知</span></p>
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="loadStatus()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                            </svg>
+                            刷新状态
+                        </button>
+                        <button class="btn btn-secondary" onclick="restartService()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M23 4v6h-6M1 20v-6h6"/>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                            </svg>
+                            重启服务
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Emby设置 -->
+                <div id="emby-section" class="content-panel section section-hidden">
+                    <div class="panel-header">
+                        <h2>🎬 Emby 设置</h2>
+                        <p>配置Emby服务器连接和代理设置</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="emby-enable">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            启用Emby代理
+                        </label>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Emby服务器地址</label>
+                            <input type="text" id="emby-server" class="form-input" placeholder="http://localhost:8096">
+                            <div class="form-hint">例如: http://192.168.1.100:8096</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">API Key</label>
+                            <input type="password" id="emby-api-key" class="form-input" placeholder="输入Emby API Key">
+                            <div class="form-hint">在Emby后台的"高级" → "API密钥"中获取</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">代理端口</label>
+                            <input type="number" id="emby-port" class="form-input" value="8096">
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">🗺️ 路径映射</div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="path-mapping-enable">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                启用路径映射
+                            </label>
+                            <div class="form-hint">将Emby本地路径映射到云盘路径</div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Emby路径前缀</label>
+                                <input type="text" id="path-from" class="form-input" placeholder="/mnt/media/123pan">
+                                <div class="form-hint">Emby库中的文件路径前缀</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">云盘路径前缀</label>
+                                <input type="text" id="path-to" class="form-input" placeholder="/123">
+                                <div class="form-hint">对应的云盘挂载路径</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="saveConfig()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                <polyline points="17 21 17 13 7 13 7 21"/>
+                                <polyline points="7 3 7 8 15 8"/>
+                            </svg>
+                            保存配置
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 123网盘设置 -->
+                <div id="pan-section" class="content-panel section section-hidden">
+                    <div class="panel-header">
+                        <h2>☁️ 123网盘设置</h2>
+                        <p>配置123网盘连接和直链参数</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="pan-enable">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            启用123网盘
+                        </label>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">🔑 应用凭证</div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Client ID</label>
+                                <input type="text" id="client-id" class="form-input" placeholder="输入应用ID">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Client Secret</label>
+                                <input type="password" id="client-secret" class="form-input" placeholder="输入应用密钥">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">挂载路径</label>
+                            <input type="text" id="mount-path" class="form-input" value="/123">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">下载模式</label>
+                            <select id="download-mode" class="form-select">
+                                <option value="direct">直链模式（推荐）</option>
+                                <option value="proxy">代理模式</option>
+                            </select>
+                            <div class="form-hint">直链模式速度更快，不消耗服务器带宽</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">🔐 URL鉴权设置</div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="url-auth-enable">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                启用URL鉴权
+                            </label>
+                            <div class="form-hint">直链模式必需，用于自定义域名鉴权</div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Secret Key</label>
+                                <input type="password" id="secret-key" class="form-input" placeholder="输入鉴权密钥">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">用户ID (UID)</label>
+                                <input type="text" id="uid" class="form-input" placeholder="输入用户ID">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">过期时间（秒）</label>
+                                <input type="number" id="expire-time" class="form-input" value="3600">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">自定义域名</label>
+                                <input type="text" id="custom-domains" class="form-input" placeholder="cdn.example.com">
+                                <div class="form-hint">多个域名用逗号分隔</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="saveConfig()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                <polyline points="17 21 17 13 7 13 7 21"/>
+                                <polyline points="7 3 7 8 15 8"/>
+                            </svg>
+                            保存配置
+                        </button>
+                        <button class="btn btn-success" onclick="testPan123()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            测试连接
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 服务设置 -->
+                <div id="service-section" class="content-panel section section-hidden">
+                    <div class="panel-header">
+                        <h2>⚙️ 服务设置</h2>
+                        <p>配置服务端口和运行参数</p>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">服务端口</label>
+                            <input type="number" id="service-port" class="form-input" value="5245">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">外部访问地址</label>
+                            <input type="text" id="external-url" class="form-input" placeholder="http://your-server.com:5245">
+                            <div class="form-hint">代理模式下客户端访问本服务的完整URL（可选）</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">日志级别</label>
+                            <select id="log-level" class="form-select">
+                                <option value="DEBUG">DEBUG（最详细）</option>
+                                <option value="INFO">INFO（正常）</option>
+                                <option value="WARNING">WARNING（仅警告）</option>
+                                <option value="ERROR">ERROR（仅错误）</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="saveConfig()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                <polyline points="17 21 17 13 7 13 7 21"/>
+                                <polyline points="7 3 7 8 15 8"/>
+                            </svg>
+                            保存配置
+                        </button>
+                        <button class="btn btn-secondary" onclick="restartService()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M23 4v6h-6M1 20v-6h6"/>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                            </svg>
+                            重启服务
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 设备管理 -->
+                <div id="devices-section" class="content-panel section section-hidden">
+                    <div class="panel-header">
+                        <h2>💻 设备管理</h2>
+                        <p>查看和管理连接到服务的客户端设备</p>
+                    </div>
+
+                    <!-- 统计卡片 -->
+                    <div class="form-grid" style="margin-bottom: 2rem;">
+                        <div class="card">
+                            <div class="card-title">👥 总用户数</div>
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--primary);" id="total-users-stat">0</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">📱 总设备数</div>
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--success);" id="total-devices-stat">0</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">🌐 总IP数</div>
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--info);" id="total-ips-stat">0</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">🔗 活跃连接</div>
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--warning);" id="active-clients-stat">0</div>
+                        </div>
+                    </div>
+
+                    <!-- 当前连接的客户端 -->
+                    <div class="card" style="margin-bottom: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <div class="card-title">🔗 当前连接客户端</div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-secondary" onclick="loadDevices()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                                    </svg>
+                                    刷新
+                                </button>
+                            </div>
+                        </div>
+                        <div id="current-clients-list"></div>
+                    </div>
+
+                    <!-- 用户历史记录 -->
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <div class="card-title">📊 用户历史记录</div>
+                            <button class="btn btn-success" onclick="exportUserHistory()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                导出数据
+                            </button>
+                        </div>
+
+                        <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                            <input type="text" id="user-search-input" class="form-input" placeholder="搜索用户名..." style="flex: 1;">
+                            <select id="user-sort-select" class="form-select" style="width: auto;">
+                                <option value="last_seen">按最后活动排序</option>
+                                <option value="device_count">按设备数排序</option>
+                                <option value="ip_count">按IP数排序</option>
+                            </select>
+                        </div>
+
+                        <div id="user-history-list"></div>
+                        <div id="user-history-pagination" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;"></div>
+                    </div>
+                </div>
+
+                <!-- 客户端拦截 -->
+                <div id="intercept-section" class="content-panel section section-hidden">
+                    <div class="panel-header">
+                        <h2>🛡️ 客户端拦截</h2>
+                        <p>配置客户端请求拦截规则和白名单</p>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">⚙️ 拦截设置</div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="intercept-enable">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                启用客户端拦截
+                            </label>
+                            <div class="form-hint">启用后将根据规则过滤客户端请求</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">拦截模式</label>
+                            <select id="intercept-mode" class="form-select">
+                                <option value="whitelist">白名单模式（仅允许列表内的客户端）</option>
+                                <option value="blacklist">黑名单模式（拒绝列表内的客户端）</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">📋 客户端白名单</div>
+                        <div class="form-hint" style="margin-bottom: 1rem;">允许以下客户端访问服务，每行一个设备ID</div>
+                        
+                        <textarea id="whitelist-devices" class="form-textarea" placeholder="例如：
+device-id-1
+device-id-2
+16136484-82c0-41f0-a26b-8c121141379b" rows="8"></textarea>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">🚫 客户端黑名单</div>
+                        <div class="form-hint" style="margin-bottom: 1rem;">禁止以下客户端访问服务，每行一个设备ID</div>
+                        
+                        <textarea id="blacklist-devices" class="form-textarea" placeholder="例如：
+blocked-device-1
+blocked-device-2" rows="8"></textarea>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">🌐 IP白名单</div>
+                        <div class="form-hint" style="margin-bottom: 1rem;">允许以下IP地址访问，每行一个IP或IP段</div>
+                        
+                        <textarea id="whitelist-ips" class="form-textarea" placeholder="例如：
+192.168.1.100
+192.168.1.0/24
+10.0.0.0/8" rows="6"></textarea>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="saveInterceptConfig()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                <polyline points="17 21 17 13 7 13 7 21"/>
+                                <polyline points="7 3 7 8 15 8"/>
+                            </svg>
+                            保存拦截配置
+                        </button>
+                        <button class="btn btn-secondary" onclick="testInterceptRule()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            测试规则
+                        </button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

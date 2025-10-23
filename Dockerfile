@@ -1,0 +1,53 @@
+# 使用官方Python 3.11镜像作为基础镜像
+FROM python:3.11-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制整个项目（包括子模块）
+COPY . .
+
+# 初始化Git子模块（如果还没初始化）
+RUN if [ -f .gitmodules ]; then \
+        git config --global --add safe.directory /app && \
+        git submodule update --init --recursive || true; \
+    fi
+
+# 安装基础依赖
+RUN grep -v "^-e" requirements.txt > requirements-base.txt && \
+    pip install --no-cache-dir -r requirements-base.txt
+
+# 安装p123client子模块
+RUN if [ -d "p123client" ]; then \
+        pip install --no-cache-dir ./p123client; \
+    else \
+        echo "Warning: p123client submodule not found"; \
+    fi
+
+# 创建必要的目录
+RUN mkdir -p /app/config /app/logs
+
+# 设置权限
+RUN chmod +x start.sh stop.sh 2>/dev/null || true
+
+# 暴露端口
+EXPOSE 5245 8096
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5245/api/status || exit 1
+
+# 启动命令
+CMD ["python", "app.py"]

@@ -1,0 +1,3 @@
+[submodule "p123client"]
+	path = p123client
+	url = https://github.com/dydydd/p123client.git

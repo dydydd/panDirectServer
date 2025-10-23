@@ -1,0 +1,72 @@
+# 敏感配置文件
+config/config.json
+config/115-cookies.txt
+config/fileid_cache.json
+config/user_history.json
+
+# Python缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Git文件
+.git/
+.gitignore
+
+# Docker文件
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 测试文件
+test_*.py
+tests/
+
+# 文档
+*.md
+docs/
+
+# 其他敏感文件
+.env
+.env.local
+.env.production
+.env.development

@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>客户端管理 - Emby代理服务</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 28px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header .subtitle {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card .icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .number {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-info {
+            background: #06b6d4;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #0891b2;
+        }
+
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .client-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+        }
+
+        .client-item:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e0;
+        }
+
+        .client-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .client-name {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+
+        .client-details {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .client-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .search-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .search-input {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+
+        .sort-select {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 20px;
+        }
+
+        .user-history-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .user-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .user-last-seen {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        .device-tag, .ip-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            font-size: 11px;
+            margin: 2px;
+        }
+
+        .ip-tag {
+            background: #dbeafe;
+        }
+
+        .blocked-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+
+        .blocked-info {
+            font-size: 14px;
+            color: #dc2626;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+
+        .loading {
+            text-align: center;
+            color: #718096;
+            padding: 40px;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #718096;
+            padding: 40px;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .search-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-input {
+                min-width: auto;
+            }
+            
+            .client-info {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .client-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面头部 -->
+        <div class="header">
+            <h1>
+                <span>📱</span>
+                客户端管理
+            </h1>
+            <div class="subtitle">实时监控和管理Emby客户端连接</div>
+        </div>
+
+        <!-- 统计信息 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="icon">👥</div>
+                <div class="number" id="totalUsers">-</div>
+                <div class="label">总用户数</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">📱</div>
+                <div class="number" id="totalDevices">-</div>
+                <div class="label">总设备数</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🌐</div>
+                <div class="number" id="totalIPs">-</div>
+                <div class="label">总IP数</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🔗</div>
+                <div class="number" id="activeClients">-</div>
+                <div class="label">活跃客户端</div>
+            </div>
+        </div>
+
+        <!-- 当前连接客户端 -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <span>🔗</span>
+                    当前连接客户端
+                </h2>
+                <div>
+                    <button class="btn btn-primary" onclick="refreshClients()">
+                        🔄 刷新
+                    </button>
+                    <button class="btn btn-warning" onclick="cleanupClients()">
+                        🗑️ 清理过期
+                    </button>
+                    <button class="btn btn-info" onclick="toggleAllClientDetails()">
+                        <span id="toggleAllClients">📖 全部展开</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="clientsList">
+                <div class="loading">正在加载客户端信息...</div>
+            </div>
+        </div>
+
+        <!-- 拦截管理 -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <span>🚫</span>
+                    拦截管理
+                </h2>
+                <button class="btn btn-primary" onclick="refreshBlockedList()">
+                    🔄 刷新
+                </button>
+            </div>
+            
+            <div id="blockedList">
+                <div class="loading">正在加载拦截列表...</div>
+            </div>
+        </div>
+
+        <!-- 用户历史记录 -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <span>📊</span>
+                    用户历史记录
+                </h2>
+                <div>
+                    <button class="btn btn-primary" onclick="refreshUserHistory()">
+                        🔄 刷新
+                    </button>
+                    <button class="btn btn-success" onclick="exportUserHistory()">
+                        📥 导出
+                    </button>
+                </div>
+            </div>
+            
+            <div class="search-controls">
+                <input type="text" id="userSearchInput" placeholder="搜索用户名..." class="search-input">
+                <select id="userSortSelect" class="sort-select">
+                    <option value="last_seen">按最后活动排序</option>
+                    <option value="device_count">按设备数排序</option>
+                    <option value="ip_count">按IP数排序</option>
+                </select>
+            </div>
+            
+            <div id="userHistoryStats" style="margin-bottom: 15px; padding: 10px; background: #f0f9ff; border-radius: 6px; font-size: 14px; color: #0369a1;">
+                <span id="userStatsText">正在统计...</span>
+            </div>
+            
+            <div id="userHistoryList">
+                <div class="loading">正在加载用户历史...</div>
+            </div>
+            
+            <div id="userHistoryPagination" class="pagination">
+                <!-- 分页按钮将在这里动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let allUserHistory = {};
+        let filteredUserHistory = {};
+        let currentPage = 1;
+        const usersPerPage = 8; // 每页显示8个用户
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshAllData();
+            
+            // 定时刷新
+            setInterval(refreshAllData, 30000); // 30秒刷新一次
+            
+            // 添加搜索和排序事件监听器
+            document.getElementById('userSearchInput').addEventListener('input', function() {
+                applyUserFilters();
+                displayUserHistoryPage();
+            });
+            
+            document.getElementById('userSortSelect').addEventListener('change', function() {
+                applyUserFilters();
+                displayUserHistoryPage();
+            });
+        });
+
+        // 刷新所有数据
+        async function refreshAllData() {
+            await Promise.all([
+                refreshClients(),
+                refreshBlockedList(),
+                refreshUserHistory(),
+                updateStats()
+            ]);
+        }
+
+        // 更新统计信息
+        async function updateStats() {
+            try {
+                const [clientsResponse, historyResponse] = await Promise.all([
+                    fetch('/api/clients'),
+                    fetch('/api/users/history')
+                ]);
+                
+                if (clientsResponse.ok) {
+                    const clientsData = await clientsResponse.json();
+                    const activeClients = Object.keys(clientsData.data.clients).length;
+                    document.getElementById('activeClients').textContent = activeClients;
+                }
+                
+                if (historyResponse.ok) {
+                    const historyData = await historyResponse.json();
+                    const users = historyData.data.users;
+                    const totalUsers = Object.keys(users).length;
+                    const totalDevices = Object.values(users).reduce((sum, user) => sum + user.devices.length, 0);
+                    const totalIPs = Object.values(users).reduce((sum, user) => sum + user.ips.length, 0);
+                    
+                    document.getElementById('totalUsers').textContent = totalUsers;
+                    document.getElementById('totalDevices').textContent = totalDevices;
+                    document.getElementById('totalIPs').textContent = totalIPs;
+                }
+            } catch (error) {
+                console.error('更新统计信息失败:', error);
+            }
+        }
+
+        // 刷新客户端列表
+        async function refreshClients() {
+            try {
+                const response = await fetch('/api/clients');
+                if (!response.ok) throw new Error('获取客户端列表失败');
+                
+                const data = await response.json();
+                const clients = data.data.clients;
+                const clientsList = document.getElementById('clientsList');
+                
+                if (Object.keys(clients).length === 0) {
+                    clientsList.innerHTML = '<div class="empty-state"><div class="icon">📱</div><div>暂无活跃客户端</div></div>';
+                    return;
+                }
+                
+                let html = '';
+                for (const [key, client] of Object.entries(clients)) {
+                    const lastSeen = new Date(client.last_seen * 1000).toLocaleString();
+                    const firstSeen = new Date(client.first_seen * 1000).toLocaleString();
+                    
+                    // 跳过无效的客户端记录
+                    if (!client.client || client.client === 'Unknown') {
+                        continue;
+                    }
+                    
+                    html += `
+                        <div class="client-item">
+                            <div class="client-info">
+                                <div>
+                                    <div class="client-name">📱 ${client.client} - ${client.device}</div>
+                                    <div class="client-details">
+                                        👤 用户: ${client.username || 'Unknown User'} | IP: ${client.ip} | 版本: ${client.version}
+                                    </div>
+                                </div>
+                                <div class="client-actions">
+                                    <button class="btn btn-sm btn-info" onclick="toggleClientDetails('${client.device_id}')">
+                                        <span id="toggle-client-${client.device_id}">📖 详情</span>
+                                    </button>
+                                    <button class="btn btn-small btn-danger" onclick="blockClientByName('${client.client}')">
+                                        🚫 拦截客户端
+                                    </button>
+                                    <button class="btn btn-small btn-danger" onclick="blockClientByIP('${client.ip}')">
+                                        🚫 拦截IP
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="client-details-${client.device_id}" style="display: none; margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; font-size: 12px;">
+                                <div>设备ID: ${client.device_id}</div>
+                                <div>首次连接: ${firstSeen}</div>
+                                <div>最后活动: ${lastSeen}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                clientsList.innerHTML = html;
+                
+            } catch (error) {
+                console.error('刷新客户端列表失败:', error);
+                document.getElementById('clientsList').innerHTML = 
+                    '<div class="alert alert-error">❌ 加载客户端列表失败</div>';
+            }
+        }
+
+        // 切换客户端详情显示/隐藏
+        function toggleClientDetails(deviceId) {
+            const detailsDiv = document.getElementById(`client-details-${deviceId}`);
+            const toggleSpan = document.getElementById(`toggle-client-${deviceId}`);
+            
+            if (detailsDiv.style.display === 'none') {
+                detailsDiv.style.display = 'block';
+                toggleSpan.textContent = '📖 收起';
+            } else {
+                detailsDiv.style.display = 'none';
+                toggleSpan.textContent = '📖 详情';
+            }
+        }
+
+        // 切换所有客户端详情
+        function toggleAllClientDetails() {
+            const toggleSpan = document.getElementById('toggleAllClients');
+            const isExpanding = toggleSpan.textContent.includes('展开');
+            
+            // 查找所有客户端详情元素
+            const clientDetails = document.querySelectorAll('[id^="client-details-"]');
+            const toggleButtons = document.querySelectorAll('[id^="toggle-client-"]');
+            
+            clientDetails.forEach(detailsDiv => {
+                detailsDiv.style.display = isExpanding ? 'block' : 'none';
+            });
+            
+            toggleButtons.forEach(button => {
+                button.textContent = isExpanding ? '📖 收起' : '📖 详情';
+            });
+            
+            toggleSpan.textContent = isExpanding ? '📖 全部收起' : '📖 全部展开';
+        }
+
+        // 清理过期客户端
+        async function cleanupClients() {
+            try {
+                showAlert('正在清理过期客户端...', 'info');
+                
+                // 调用清理API（这里我们直接刷新，因为API会自动清理）
+                await refreshClients();
+                
+                showAlert('✅ 过期客户端已清理', 'success');
+                
+            } catch (error) {
+                showAlert('清理过期客户端失败: ' + error.message, 'error');
+            }
+        }
+
+        // 拦截客户端（按客户端名称）
+        async function blockClientByName(clientName) {
+            if (!confirm(`确定要拦截客户端 "${clientName}" 吗？\n\n拦截后该类型的客户端将无法访问Emby服务`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/clients/block', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: 'client',
+                        value: clientName
+                    })
+                });
+                
+                if (!response.ok) throw new Error('拦截客户端失败');
+                
+                const data = await response.json();
+                showAlert(`✅ ${data.message}`, 'success');
+                
+                // 刷新拦截列表
+                setTimeout(() => {
+                    refreshBlockedList();
+                }, 1000);
+                
+            } catch (error) {
+                showAlert('拦截客户端失败: ' + error.message, 'error');
+            }
+        }
+
+        // 拦截客户端（按IP地址）
+        async function blockClientByIP(ipAddress) {
+            if (!confirm(`确定要拦截IP地址 "${ipAddress}" 吗？\n\n拦截后该IP地址将无法访问Emby服务`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/clients/block', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: 'ip',
+                        value: ipAddress
+                    })
+                });
+                
+                if (!response.ok) throw new Error('拦截IP失败');
+                
+                const data = await response.json();
+                showAlert(`✅ ${data.message}`, 'success');
+                
+                // 刷新拦截列表
+                setTimeout(() => {
+                    refreshBlockedList();
+                }, 1000);
+                
+            } catch (error) {
+                showAlert('拦截IP失败: ' + error.message, 'error');
+            }
+        }
+
+        // 刷新拦截列表
+        async function refreshBlockedList() {
+            try {
+                const response = await fetch('/api/clients/blocked');
+                if (!response.ok) throw new Error('获取拦截列表失败');
+                
+                const data = await response.json();
+                const blocked = data.data;
+                const blockedList = document.getElementById('blockedList');
+                
+                if (!blocked.enable) {
+                    blockedList.innerHTML = '<div class="alert alert-success">✅ 客户端拦截未启用，所有客户端都可以访问</div>';
+                    return;
+                }
+                
+                let html = '';
+                let hasBlocked = false;
+                
+                // 显示被拦截的客户端
+                blocked.blocked_clients.forEach(client => {
+                    hasBlocked = true;
+                    html += `
+                        <div class="blocked-item">
+                            <div class="blocked-info">🚫 客户端: ${client}</div>
+                            <button class="btn btn-success btn-small" onclick="unblockClient('client', '${client}')">
+                                ✅ 解除拦截
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                // 显示被拦截的设备
+                blocked.blocked_devices.forEach(device => {
+                    hasBlocked = true;
+                    html += `
+                        <div class="blocked-item">
+                            <div class="blocked-info">🚫 设备: ${device}</div>
+                            <button class="btn btn-success btn-small" onclick="unblockClient('device', '${device}')">
+                                ✅ 解除拦截
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                // 显示被拦截的IP
+                blocked.blocked_ips.forEach(ip => {
+                    hasBlocked = true;
+                    html += `
+                        <div class="blocked-item">
+                            <div class="blocked-info">🚫 IP地址: ${ip}</div>
+                            <button class="btn btn-success btn-small" onclick="unblockClient('ip', '${ip}')">
+                                ✅ 解除拦截
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                if (!hasBlocked) {
+                    html = '<div class="empty-state"><div class="icon">🚫</div><div>暂无拦截规则</div></div>';
+                }
+                
+                blockedList.innerHTML = html;
+                
+            } catch (error) {
+                console.error('刷新拦截列表失败:', error);
+                document.getElementById('blockedList').innerHTML = 
+                    '<div class="alert alert-error">❌ 加载拦截列表失败</div>';
+            }
+        }
+
+        // 解除拦截
+        async function unblockClient(type, value) {
+            if (!confirm(`确定要解除拦截 "${value}" 吗？\n\n解除后该${type}将可以正常访问Emby服务`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/clients/unblock', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: type,
+                        value: value
+                    })
+                });
+                
+                if (!response.ok) throw new Error('解除拦截失败');
+                
+                const data = await response.json();
+                showAlert(`✅ ${data.message}`, 'success');
+                
+                // 刷新拦截列表
+                setTimeout(() => {
+                    refreshBlockedList();
+                }, 1000);
+                
+            } catch (error) {
+                showAlert('解除拦截失败: ' + error.message, 'error');
+            }
+        }
+
+        // 刷新用户历史记录
+        async function refreshUserHistory() {
+            try {
+                const response = await fetch('/api/users/history');
+                if (!response.ok) throw new Error('获取用户历史失败');
+                
+                const data = await response.json();
+                allUserHistory = data.data.users;
+                
+                // 更新统计信息
+                updateUserStats();
+                
+                // 应用搜索和排序
+                applyUserFilters();
+                
+                // 显示当前页
+                displayUserHistoryPage();
+                
+            } catch (error) {
+                console.error('刷新用户历史失败:', error);
+                document.getElementById('userHistoryList').innerHTML = 
+                    '<div class="alert alert-error">❌ 加载用户历史失败</div>';
+            }
+        }
+
+        // 更新用户统计信息
+        function updateUserStats() {
+            const totalUsers = Object.keys(allUserHistory).length;
+            const totalDevices = Object.values(allUserHistory).reduce((sum, user) => sum + user.devices.length, 0);
+            const totalIPs = Object.values(allUserHistory).reduce((sum, user) => sum + user.ips.length, 0);
+            
+            document.getElementById('userStatsText').innerHTML = 
+                `📊 总用户: ${totalUsers} | 📱 总设备: ${totalDevices} | 🌐 总IP: ${totalIPs}`;
+        }
+
+        // 应用搜索和排序过滤
+        function applyUserFilters() {
+            const searchTerm = document.getElementById('userSearchInput').value.toLowerCase();
+            const sortBy = document.getElementById('userSortSelect').value;
+            
+            // 搜索过滤
+            filteredUserHistory = {};
+            for (const [userId, userInfo] of Object.entries(allUserHistory)) {
+                if (userId.toLowerCase().includes(searchTerm)) {
+                    filteredUserHistory[userId] = userInfo;
+                }
+            }
+            
+            // 排序
+            const sortedEntries = Object.entries(filteredUserHistory).sort((a, b) => {
+                const [userIdA, userInfoA] = a;
+                const [userIdB, userInfoB] = b;
+                
+                switch (sortBy) {
+                    case 'last_seen':
+                        return userInfoB.last_seen - userInfoA.last_seen;
+                    case 'device_count':
+                        return userInfoB.devices.length - userInfoA.devices.length;
+                    case 'ip_count':
+                        return userInfoB.ips.length - userInfoA.ips.length;
+                    default:
+                        return 0;
+                }
+            });
+            
+            // 重新构建过滤后的对象
+            filteredUserHistory = {};
+            sortedEntries.forEach(([userId, userInfo]) => {
+                filteredUserHistory[userId] = userInfo;
+            });
+            
+            // 重置到第一页
+            currentPage = 1;
+        }
+
+        // 显示用户历史记录页面
+        function displayUserHistoryPage() {
+            const userHistoryList = document.getElementById('userHistoryList');
+            const paginationDiv = document.getElementById('userHistoryPagination');
+            
+            const filteredUsers = Object.keys(filteredUserHistory);
+            const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+            
+            if (filteredUsers.length === 0) {
+                userHistoryList.innerHTML = '<div class="empty-state"><div class="icon">👤</div><div>暂无匹配的用户历史记录</div></div>';
+                paginationDiv.innerHTML = '';
+                return;
+            }
+            
+            // 计算当前页的用户
+            const startIndex = (currentPage - 1) * usersPerPage;
+            const endIndex = Math.min(startIndex + usersPerPage, filteredUsers.length);
+            const currentPageUsers = filteredUsers.slice(startIndex, endIndex);
+            
+            let html = '';
+            currentPageUsers.forEach(userId => {
+                const userInfo = filteredUserHistory[userId];
+                const lastSeen = new Date(userInfo.last_seen * 1000).toLocaleString('zh-CN');
+                
+                html += `
+                    <div class="user-history-item">
+                        <div class="user-header">
+                            <div>
+                                <div class="user-name">👤 ${userId}</div>
+                                <div class="user-last-seen">最后活动: ${lastSeen}</div>
+                            </div>
+                            <button class="btn btn-sm btn-info" onclick="toggleUserDetails('${userId}')">
+                                <span id="toggle-${userId}">📖 展开</span>
+                            </button>
+                        </div>
+                        
+                        <div id="details-${userId}" style="display: none;">
+                            <div style="margin-bottom: 15px;">
+                                <h5 style="margin: 0 0 10px 0; color: #374151;">📱 使用过的设备 (${userInfo.devices.length})</h5>
+                                <div>
+                `;
+                
+                userInfo.devices.forEach(device => {
+                    const deviceLastSeen = new Date(device.last_seen * 1000).toLocaleString('zh-CN');
+                    html += `
+                        <span class="device-tag">
+                            ${device.client} - ${device.device}<br>
+                            <small>版本: ${device.version} | 最后使用: ${deviceLastSeen}</small>
+                        </span>
+                    `;
+                });
+                
+                html += `
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5 style="margin: 0 0 10px 0; color: #374151;">🌐 使用过的IP (${userInfo.ips.length})</h5>
+                                <div>
+                `;
+                
+                userInfo.ips.forEach(ip => {
+                    const ipLastSeen = new Date(ip.last_seen * 1000).toLocaleString('zh-CN');
+                    html += `
+                        <span class="ip-tag">
+                            ${ip.ip}<br>
+                            <small>最后使用: ${ipLastSeen}</small>
+                        </span>
+                    `;
+                });
+                
+                html += `
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            userHistoryList.innerHTML = html;
+            
+            // 生成分页按钮
+            generatePagination(totalPages);
+        }
+
+        // 切换用户详情显示/隐藏
+        function toggleUserDetails(userId) {
+            const detailsDiv = document.getElementById(`details-${userId}`);
+            const toggleSpan = document.getElementById(`toggle-${userId}`);
+            
+            if (detailsDiv.style.display === 'none') {
+                detailsDiv.style.display = 'block';
+                toggleSpan.textContent = '📖 收起';
+            } else {
+                detailsDiv.style.display = 'none';
+                toggleSpan.textContent = '📖 展开';
+            }
+        }
+
+        // 生成分页按钮
+        function generatePagination(totalPages) {
+            const paginationDiv = document.getElementById('userHistoryPagination');
+            
+            if (totalPages <= 1) {
+                paginationDiv.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            // 上一页按钮
+            if (currentPage > 1) {
+                html += `<button class="btn btn-sm btn-primary" onclick="goToUserPage(${currentPage - 1})">← 上一页</button>`;
+            }
+            
+            // 页码按钮
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const isActive = i === currentPage ? 'background: #1e40af; color: white;' : '';
+                html += `<button class="btn btn-sm btn-primary" onclick="goToUserPage(${i})" style="${isActive}">${i}</button>`;
+            }
+            
+            // 下一页按钮
+            if (currentPage < totalPages) {
+                html += `<button class="btn btn-sm btn-primary" onclick="goToUserPage(${currentPage + 1})">下一页 →</button>`;
+            }
+            
+            paginationDiv.innerHTML = html;
+        }
+
+        // 跳转到指定页面
+        function goToUserPage(page) {
+            currentPage = page;
+            displayUserHistoryPage();
+        }
+
+        // 导出用户历史记录
+        function exportUserHistory() {
+            try {
+                const dataStr = JSON.stringify(allUserHistory, null, 2);
+                const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `user_history_${new Date().toISOString().split('T')[0]}.json`;
+                link.click();
+                URL.revokeObjectURL(url);
+                showAlert('✅ 用户历史记录已导出', 'success');
+            } catch (error) {
+                showAlert('导出失败: ' + error.message, 'error');
+            }
+        }
+
+        // 显示提示信息
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            // 插入到页面顶部
+            const container = document.querySelector('.container');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
