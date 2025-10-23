@@ -84,6 +84,21 @@ class StandardConfigManager:
                 created_at INTEGER DEFAULT (unixepoch()),
                 updated_at INTEGER DEFAULT (unixepoch())
             );
+
+            -- 客户端拦截配置表
+            CREATE TABLE IF NOT EXISTS client_filter_config (
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                enable INTEGER NOT NULL DEFAULT 0,
+                mode TEXT NOT NULL DEFAULT 'blacklist',
+                blocked_clients TEXT DEFAULT '[]',
+                blocked_devices TEXT DEFAULT '[]',
+                blocked_ips TEXT DEFAULT '[]',
+                allowed_clients TEXT DEFAULT '[]',
+                allowed_devices TEXT DEFAULT '[]',
+                allowed_ips TEXT DEFAULT '[]',
+                created_at INTEGER DEFAULT (unixepoch()),
+                updated_at INTEGER DEFAULT (unixepoch())
+            );
             """
             
             with self.db.get_cursor() as cursor:
@@ -285,18 +300,8 @@ class StandardConfigManager:
                 """)
                 row = cursor.fetchone()
                 
-                if row:
-                    return {
-                        'enable': bool(row['enable']),
-                        'mode': row['mode'],
-                        'blocked_clients': json.loads(row['blocked_clients'] or '[]'),
-                        'blocked_devices': json.loads(row['blocked_devices'] or '[]'),
-                        'blocked_ips': json.loads(row['blocked_ips'] or '[]'),
-                        'allowed_clients': json.loads(row['allowed_clients'] or '[]'),
-                        'allowed_devices': json.loads(row['allowed_devices'] or '[]'),
-                        'allowed_ips': json.loads(row['allowed_ips'] or '[]')
-                    }
-                else:
+                if not row:
+                    # 返回默认配置
                     return {
                         'enable': False,
                         'mode': 'blacklist',
@@ -307,8 +312,21 @@ class StandardConfigManager:
                         'allowed_devices': [],
                         'allowed_ips': []
                     }
+                
+                return {
+                    'enable': bool(row['enable']),
+                    'mode': row['mode'] or 'blacklist',
+                    'blocked_clients': json.loads(row['blocked_clients'] or '[]'),
+                    'blocked_devices': json.loads(row['blocked_devices'] or '[]'),
+                    'blocked_ips': json.loads(row['blocked_ips'] or '[]'),
+                    'allowed_clients': json.loads(row['allowed_clients'] or '[]'),
+                    'allowed_devices': json.loads(row['allowed_devices'] or '[]'),
+                    'allowed_ips': json.loads(row['allowed_ips'] or '[]')
+                }
+                
         except Exception as e:
             logger.error(f"获取客户端拦截配置失败: {e}")
+            # 返回默认配置
             return {
                 'enable': False,
                 'mode': 'blacklist',
